@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 두 봉우리와 오르는 길을 단순화한 아이콘 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#CFE8D8"
+        android:pathData="M30,74 L48,44 L58,58 L66,48 L80,74 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,44 L53,52 L50,51 L47,54 L44,50 Z" />
+    <path
+        android:strokeColor="#F2A541"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M36,72 C44,68 42,62 50,60 C58,58 56,54 64,52" />
+    <path
+        android:fillColor="#F2A541"
+        android:pathData="M64,52 m-3.5,0 a3.5,3.5 0,1 1,7 0 a3.5,3.5 0,1 1,-7 0" />
+</vector>
