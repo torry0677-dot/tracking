@@ -45,7 +45,7 @@ fun MapAuthBanner(modifier: Modifier = Modifier) {
     val error by MapAuth.error.collectAsStateWithLifecycle()
     val msg = error ?: return
     Text(
-        text = "$msg\nREADME의 ‘네이버 지도 키 발급’을 참고해 주세요. 기록은 지도 없이도 됩니다.",
+        text = "$msg\n기록과 사진, 공유는 지도 없이도 돼요.",
         color = Color.White,
         style = MaterialTheme.typography.bodySmall,
         modifier = modifier

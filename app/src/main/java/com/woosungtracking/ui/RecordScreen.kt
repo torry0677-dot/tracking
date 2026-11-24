@@ -210,7 +210,7 @@ fun RecordScreen(onBack: () -> Unit) {
                         modifier = Modifier.weight(1f).height(52.dp),
                     ) {
                         Icon(if (s.paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null, Modifier.size(20.dp))
-                        Text(if (s.paused) "  재개" else "  일시정지")
+                        Text(if (s.paused) " 재개" else " 멈춤", maxLines = 1)
                     }
                     Button(
                         onClick = { confirmStop = true },

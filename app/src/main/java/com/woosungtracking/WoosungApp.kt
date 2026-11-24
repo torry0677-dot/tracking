@@ -26,10 +26,17 @@ class WoosungApp : Application() {
         if (MapAuth.hasKey) {
             sdk.client = NaverMapSdk.NcpKeyClient(BuildConfig.NAVER_CLIENT_ID)
         } else {
-            MapAuth.error.value = "네이버 지도 Client ID가 설정되지 않았습니다."
+            MapAuth.error.value = "이 앱에는 아직 네이버 지도 키가 없어 지도가 보이지 않아요."
         }
         sdk.onAuthFailedListener = NaverMapSdk.OnAuthFailedListener { e ->
-            MapAuth.error.value = "네이버 지도 인증 실패: ${e.message}"
+            if (MapAuth.hasKey) {
+                val code = e.errorCode
+                MapAuth.error.value = when (code) {
+                    "401" -> "네이버 지도 키가 맞지 않아요. 콘솔에 패키지 이름 com.woosungtracking 이 등록됐는지 확인해 주세요. [401]"
+                    "429" -> "네이버 콘솔에서 Dynamic Map 사용을 켜 주세요. [429]"
+                    else -> "네이버 지도 인증 실패 [$code]"
+                }
+            }
         }
         recoverUnfinishedHikes()
     }
