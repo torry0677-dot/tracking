@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우성트래킹 산행 기록</title>
+<meta name="description" content="우성트래킹으로 기록한 산행 경로">
+<style>
+  :root { --pine:#1F6B4A; --ember:#E8590C; --bg:#F6F4EE; --card:#fff; --text:#1d1f1c; --muted:#666; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121411; --card:#1A1C19; --text:#e8e8e3; --muted:#a0a39b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--pine); color:#fff; padding:14px 16px; font-weight:700; }
+  #map { width:100%; height:55vh; min-height:280px; background:#ddd; }
+  main { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  .date { color:var(--muted); font-size:.9rem; margin-bottom:14px; }
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat { background:var(--card); border-radius:12px; padding:10px 12px; }
+  .stat b { display:block; font-size:1.15rem; }
+  .stat span { color:var(--muted); font-size:.8rem; }
+  .chart { background:var(--card); border-radius:12px; padding:10px; margin-top:14px; }
+  .chart svg { width:100%; height:120px; display:block; }
+  .err { padding:40px 16px; text-align:center; color:var(--muted); }
+  footer { color:var(--muted); font-size:.8rem; text-align:center; padding:20px; }
+</style>
+</head>
+<body>
+<header>우성트래킹</header>
+<div id="map"></div>
+<main id="info"><div class="err">산행 기록을 불러오는 중…</div></main>
+<footer>우성트래킹 앱으로 기록한 산행입니다.</footer>
+<script src="config.js"></script>
+<script>
+(function () {
+  function decodePoly(str, dims) {
+    var out = [], idx = 0, prev = new Array(dims).fill(0);
+    while (idx < str.length) {
+      var row = [];
+      for (var d = 0; d < dims; d++) {
+        var res = 0, shift = 0, b;
+        do { b = str.charCodeAt(idx++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        prev[d] += (res & 1) ? ~(res >> 1) : (res >> 1);
+        row.push(prev[d]);
+      }
+      out.push(row);
+    }
+    return out;
+  }
+  function b64urlToBytes(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+  async function inflate(bytes) {
+    var ds = new DecompressionStream('deflate-raw');
+    return await new Response(new Blob([bytes]).stream().pipeThrough(ds)).text();
+  }
+  function fmtDist(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(2) + ' km'; }
+  function fmtDur(s) {
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return h > 0 ? h + ':' + p(m) + ':' + p(ss) : p(m) + ':' + p(ss);
+  }
+  function esc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+  function chart(alts, coords) {
+    if (alts.length < 2) return '';
+    var dist = [0];
+    for (var i = 1; i < coords.length; i++) dist.push(dist[i - 1] + hav(coords[i - 1], coords[i]));
+    var W = 600, H = 120, max = Math.max.apply(null, alts), min = Math.min.apply(null, alts);
+    var range = Math.max(max - min, 10), total = dist[dist.length - 1] || 1;
+    var pts = alts.map(function (a, i) {
+      return (dist[i] / total * W).toFixed(1) + ',' + (H - (a - min) / range * H * 0.9 - H * 0.05).toFixed(1);
+    });
+    return '<div class="chart"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<polygon fill="rgba(31,107,74,.25)" points="0,' + H + ' ' + pts.join(' ') + ' ' + W + ',' + H + '"/>' +
+      '<polyline fill="none" stroke="#1F6B4A" stroke-width="2.5" vector-effect="non-scaling-stroke" points="' + pts.join(' ') + '"/>' +
+      '</svg><div class="date">고도 ' + min + ' m ~ ' + max + ' m</div></div>';
+  }
+  function hav(a, b) {
+    var R = 6371000, r = Math.PI / 180;
+    var dLat = (b[0] - a[0]) * r, dLng = (b[1] - a[1]) * r;
+    var x = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function drawNaver(coords) {
+    var path = coords.map(function (c) { return new naver.maps.LatLng(c[0], c[1]); });
+    var map = new naver.maps.Map('map', { mapTypeId: naver.maps.MapTypeId.TERRAIN, center: path[0], zoom: 14 });
+    var line = new naver.maps.Polyline({ map: map, path: path, strokeColor: '#E8590C', strokeWeight: 5, strokeOpacity: 0.95 });
+    new naver.maps.Marker({ map: map, position: path[0], title: '출발' });
+    new naver.maps.Marker({ map: map, position: path[path.length - 1], title: '도착' });
+    map.fitBounds(line.getBounds(), { top: 40, right: 40, bottom: 40, left: 40 });
+  }
+  function drawLeaflet(coords) {
+    var css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    var s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = function () {
+      var map = L.map('map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(map);
+      var line = L.polyline(coords, { color: '#E8590C', weight: 5 }).addTo(map);
+      L.circleMarker(coords[0], { radius: 7, color: '#1F6B4A', fillOpacity: 1 }).addTo(map).bindTooltip('출발');
+      L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#C92A2A', fillOpacity: 1 }).addTo(map).bindTooltip('도착');
+      map.fitBounds(line.getBounds(), { padding: [30, 30] });
+    };
+    document.head.appendChild(s);
+  }
+  function drawMap(coords) {
+    var key = (window.WOOSUNG_CONFIG || {}).naverKeyId;
+    if (!key) return drawLeaflet(coords);
+    var s = document.createElement('script');
+    s.src = 'https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=' + encodeURIComponent(key);
+    s.onload = function () { drawNaver(coords); };
+    s.onerror = function () { drawLeaflet(coords); };
+    document.head.appendChild(s);
+  }
+
+  async function main() {
+    var info = document.getElementById('info');
+    var hash = location.hash.slice(1);
+    if (!hash) { info.innerHTML = '<div class="err">공유된 산행 링크로 열어 주세요.</div>'; return; }
+    try {
+      var data = JSON.parse(await inflate(b64urlToBytes(hash)));
+      var coords = decodePoly(data.p, 2).map(function (r) { return [r[0] / 1e5, r[1] / 1e5]; });
+      var alts = data.a ? decodePoly(data.a, 1).map(function (r) { return r[0]; }) : [];
+      document.title = data.t + ' · 우성트래킹';
+      var date = new Date(data.s * 1000).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+      info.innerHTML =
+        '<h1>' + esc(data.t) + '</h1><div class="date">' + esc(date) + '</div>' +
+        '<div class="stats">' +
+        '<div class="stat"><span>거리</span><b>' + fmtDist(data.d) + '</b></div>' +
+        '<div class="stat"><span>시간</span><b>' + fmtDur(data.m) + '</b></div>' +
+        '<div class="stat"><span>오른 높이</span><b>' + data.g + ' m</b></div>' +
+        '</div>' + chart(alts, coords);
+      if (coords.length) drawMap(coords);
+    } catch (e) {
+      info.innerHTML = '<div class="err">링크를 읽을 수 없어요. 링크가 잘리지 않았는지 확인해 주세요.</div>';
+    }
+  }
+  main();
+})();
+</script>
+</body>
+</html>

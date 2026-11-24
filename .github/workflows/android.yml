@@ -1,0 +1,32 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check Naver key
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+        run: |
+          if [ -n "$NAVER_CLIENT_ID" ]; then echo "NAVER_CLIENT_ID: set"; else echo "::warning::NAVER_CLIENT_ID secret is not set, the map will not load"; fi
+      - name: Build debug APK
+        env:
+          # 저장소 Settings > Secrets and variables > Actions 에 NAVER_CLIENT_ID 를 넣어 두면 지도가 보이는 APK가 만들어집니다.
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: woosungtracking-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
