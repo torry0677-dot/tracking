@@ -1,0 +1,43 @@
+name: OPIc APK
+
+on:
+  push:
+    branches: [opic]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Build release APK
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk opic-commute.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opic-commute-apk
+          path: opic-commute.apk
+      # opic 브랜치에 push 될 때마다 같은 주소로 최신 APK를 올립니다.
+      - name: Publish release (opic-latest)
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete opic-latest --yes --cleanup-tag || true
+          gh release create opic-latest opic-commute.apk \
+            --target "${GITHUB_SHA}" \
+            --title "OPIc 출퇴근 학습 APK (build ${GITHUB_RUN_NUMBER})" \
+            --notes "갤럭시에서 이 페이지를 열고 opic-commute.apk 를 눌러 설치하세요. 커밋 ${GITHUB_SHA::7}"
